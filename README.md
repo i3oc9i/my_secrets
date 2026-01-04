@@ -1,6 +1,6 @@
 # my-secrets
 
-Manage GPG-encrypted secrets in TOML format.
+A command-line tool for securely managing secrets like API keys, tokens, and passwords. Secrets are stored in a simple TOML format, encrypted with GPG, and organized into categories for easy access. Export secrets as shell variables or back them up as plain TOML files.
 
 ## Installation
 
