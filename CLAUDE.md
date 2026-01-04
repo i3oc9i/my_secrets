@@ -18,7 +18,7 @@ Single-file CLI tool (`my_secrets.py`) that manages GPG-encrypted secrets stored
 
 - **Config**: Stored at `~/.config/my-secrets/config.toml`, contains `gpg_recipient` and `secrets_file` path
 - **Secrets**: Encrypted with GPG at `~/.config/my-secrets/secrets.gpg` (customizable), decrypted TOML with `[category]` sections
-- **Commands**: `init`, `list`, `get`, `set`, `delete`, `search`, `export`, `import`
+- **Commands**: `init`, `config`, `list`, `get`, `set`, `delete`, `search`, `export`, `import`
 
 ### Data Flow
 
@@ -32,7 +32,9 @@ Single-file CLI tool (`my_secrets.py`) that manages GPG-encrypted secrets stored
 
 - Uses system `gpg` command via `subprocess`
 - `list_gpg_keys()` parses `gpg --list-keys --with-colons` output
-- `create_gpg_key()` uses `gpg --quick-gen-key` for interactive key creation
+- `find_gpg_key()` finds a key by name, email, or key ID
+- `select_gpg_key_interactive()` interactive key selection/creation
+- `create_gpg_key()` uses `gpg --quick-gen-key` for key creation
 
 ## Testing
 

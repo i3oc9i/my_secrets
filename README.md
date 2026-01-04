@@ -24,9 +24,10 @@ This will:
 ### Init Options
 
 ```bash
-my-secrets init                          # Default location
+my-secrets init                          # Interactive GPG key selection
+my-secrets init --gpg-key user@email.com # Use specific GPG key
+my-secrets init --gpg-key "User Name"    # Select by name
 my-secrets init -s ~/secrets.gpg         # Custom secrets file location
-my-secrets init -s /secure/secrets.gpg   # Any custom path
 my-secrets init -f                       # Force reinitialize (overwrite)
 ```
 
@@ -53,6 +54,9 @@ my-secrets search TOKEN            # Regex search across all secrets
 my-secrets export database         # Output: export KEY='value'
 my-secrets export --all            # Export full TOML (for backup)
 my-secrets import backup.toml      # Import from TOML file
+my-secrets config                  # Show current configuration
+my-secrets config --gpg-key        # Change GPG key (interactive)
+my-secrets config --gpg-key EMAIL  # Change to specific GPG key
 ```
 
 ## Backup & Restore
@@ -84,11 +88,13 @@ REDIS_URL = "redis://localhost"
 Config file: `~/.config/my-secrets/config.toml`
 
 ```toml
-gpg_recipient = "your@email.com"
+gpg_recipient = "your@email.com"  # Your Name, KEY_ID
 secrets_file = "~/.config/my-secrets/secrets.gpg"
 ```
 
-The `secrets_file` path can be customized during init or by editing the config.
+The GPG key can be specified by name, email, or key ID. The config stores the email with name and key ID as a comment for reference.
+
+Use `my-secrets config --gpg-key` to change the GPG key (secrets are automatically re-encrypted).
 
 ## Requirements
 
