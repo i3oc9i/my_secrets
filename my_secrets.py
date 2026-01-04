@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -29,29 +28,6 @@ class Color:
     CYAN = "\033[96m"
     BOLD = "\033[1m"
     RESET = "\033[0m"
-
-
-class Status(Enum):
-    """Operation status."""
-    SUCCESS = "success"
-    NOT_FOUND = "not_found"
-    ERROR = "error"
-
-
-@dataclass
-class Secret:
-    """A single secret entry."""
-    category: str
-    name: str
-    value: str
-
-
-@dataclass
-class Result:
-    """Result of an operation."""
-    status: Status
-    message: str = ""
-    data: Optional[Dict] = None
 
 
 @dataclass
@@ -169,7 +145,7 @@ def decrypt_secrets() -> str:
             env["GPG_TTY"] = "/dev/tty"
 
     result = subprocess.run(
-        ["gpg", "--decrypt", "--recipient", config.gpg_recipient, "--quiet", str(config.secrets_file)],
+        ["gpg", "--decrypt", "--quiet", str(config.secrets_file)],
         capture_output=True,
         text=True,
         env=env
@@ -231,14 +207,14 @@ def serialize_toml(data: Dict[str, Dict[str, str]]) -> str:
         for key in sorted(values.keys()):
             value = values[key]
             if isinstance(value, str):
-                escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+                escaped = value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace('"', '\\"')
                 lines.append(f'{key} = "{escaped}"')
             elif isinstance(value, bool):
                 lines.append(f"{key} = {str(value).lower()}")
             elif isinstance(value, (int, float)):
                 lines.append(f"{key} = {value}")
             else:
-                escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+                escaped = str(value).replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace('"', '\\"')
                 lines.append(f'{key} = "{escaped}"')
         lines.append("")
 
@@ -255,6 +231,29 @@ def save_secrets(secrets: Dict[str, Dict[str, str]]) -> None:
     """Serialize and encrypt secrets to file."""
     content = serialize_toml(secrets)
     encrypt_secrets(content)
+
+
+def validate_secrets_structure(secrets: Dict) -> tuple[List[str], List[str]]:
+    """Validate secrets structure and naming. Returns (errors, warnings)."""
+    errors = []
+    warnings = []
+    key_pattern = re.compile(r'^[A-Z][A-Z0-9_]*$')
+
+    for section, values in secrets.items():
+        if '.' in section:
+            errors.append(f"[{section}]: category name cannot contain dots")
+
+        if not isinstance(values, dict):
+            errors.append(f"[{section}] is not a valid category (expected table)")
+            continue
+
+        for key, value in values.items():
+            if not isinstance(value, str):
+                errors.append(f"[{section}].{key}: value must be string, got {type(value).__name__}")
+            if not key_pattern.match(key):
+                warnings.append(f"[{section}].{key}: key should be UPPER_SNAKE_CASE")
+
+    return errors, warnings
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -275,7 +274,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     # List secrets in specific category
     if args.category:
         if args.category not in secrets:
-            print(f"{Color.RED}Category '{args.category}' not found.{Color.RESET}")
+            print(f"{Color.RED}Category '{args.category}' not found.{Color.RESET}", file=sys.stderr)
             return 1
         print(f"{Color.CYAN}[{args.category}]{Color.RESET}")
         for key in sorted(secrets[args.category].keys()):
@@ -310,6 +309,16 @@ def cmd_get(args: argparse.Namespace) -> int:
 
 def cmd_set(args: argparse.Namespace) -> int:
     """Set a secret value."""
+    # Validate category name (no dots allowed in TOML section names)
+    if '.' in args.category:
+        print(f"{Color.RED}Error: category name cannot contain dots{Color.RESET}", file=sys.stderr)
+        return 1
+
+    # Validate key naming
+    key_pattern = re.compile(r'^[A-Z][A-Z0-9_]*$')
+    if not key_pattern.match(args.name):
+        print(f"{Color.YELLOW}Warning: '{args.name}' should be UPPER_SNAKE_CASE{Color.RESET}")
+
     secrets = load_secrets()
 
     if args.value:
@@ -514,6 +523,21 @@ def cmd_import(args: argparse.Namespace) -> int:
         print(f"{Color.RED}Invalid TOML file: {e}{Color.RESET}", file=sys.stderr)
         return 1
 
+    # Validate structure and naming
+    errors, warnings = validate_secrets_structure(secrets)
+
+    if errors:
+        print(f"{Color.RED}Validation errors:{Color.RESET}", file=sys.stderr)
+        for error in errors:
+            print(f"  {Color.RED}● {error}{Color.RESET}", file=sys.stderr)
+        return 1
+
+    if warnings:
+        print(f"{Color.YELLOW}Validation warnings:{Color.RESET}")
+        for warning in warnings:
+            print(f"  {Color.YELLOW}● {warning}{Color.RESET}")
+        print()
+
     # Count secrets
     count = sum(len(v) for v in secrets.values() if isinstance(v, dict))
 
@@ -544,6 +568,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
 
     subparsers = parser.add_subparsers(dest="command", title="commands", metavar="")
+
+    # init command
+    init_parser = subparsers.add_parser("init", help="Initialize new secrets file")
+    init_parser.add_argument("-f", "--force", action="store_true", help="Overwrite existing file")
+    init_parser.add_argument("-s", "--secrets-file", type=Path, help="Custom path for secrets file")
+    init_parser.set_defaults(func=cmd_init)
 
     # list command
     list_parser = subparsers.add_parser("list", help="List secrets")
@@ -587,12 +617,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     import_parser.add_argument("file", help="TOML file to import")
     import_parser.add_argument("-f", "--force", action="store_true", help="Skip confirmation")
     import_parser.set_defaults(func=cmd_import)
-
-    # init command
-    init_parser = subparsers.add_parser("init", help="Initialize new secrets file")
-    init_parser.add_argument("-f", "--force", action="store_true", help="Overwrite existing file")
-    init_parser.add_argument("-s", "--secrets-file", type=Path, help="Custom path for secrets file")
-    init_parser.set_defaults(func=cmd_init)
 
     args = parser.parse_args(argv)
 
