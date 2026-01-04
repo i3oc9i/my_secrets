@@ -125,9 +125,9 @@ def create_gpg_key(name: str, email: str) -> Optional[str]:
     print(f"{Color.GRAY}Generating GPG key...{Color.RESET}")
     print(f"{Color.GRAY}You may be prompted for a passphrase.{Color.RESET}\n")
 
-    # Run gpg interactively with quick generate
+    # Run gpg interactively with quick generate (uses GPG defaults for algorithm and expiration)
     result = subprocess.run(
-        ["gpg", "--quick-gen-key", f"{name} <{email}>", "default", "default", "2y"],
+        ["gpg", "--quick-gen-key", f"{name} <{email}>"],
     )
 
     if result.returncode != 0:

@@ -43,6 +43,6 @@ Use `secrets.toml` as example input for import testing:
 my-secrets import secrets.toml
 ```
 
- ## Important
+## Important
 
  - Alway update the README.md, and the CLAUDE.md (if applicable) before of making a commit.
